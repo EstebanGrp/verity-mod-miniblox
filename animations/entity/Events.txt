@@ -1,0 +1,514 @@
+Events
+
+Everything scripts can react to — with cancellation and writable fields.
+
+How events work
+
+Subscribe with game.on(name, handler); your handler receives one event object (commonly e) describing what happened. Unsubscribe with game.off.
+
+game.on("blockBreak", (e) => e.cancel());   // make blocks unbreakable
+game.on("playerChat", (e) => {
+  e.message = "[" + game.teams.of(e.player.id) + "] " + e.message;  // rewrite chat
+});
+
+const h = (e) => {};
+game.on("playerMove", h);
+game.off("playerMove", h);   // remove one handler
+game.off("playerMove");      // remove all handlers for the event
+
+
+Two superpowers
+
+Events tagged cancellable can be stopped with e.cancel(). Fields marked writable can be reassigned to change what happens — e.damage = 0, e.spawn = {x, y, z}, e.keepInventory = true.
+
+Common payload shapes
+
+e.player    // a Player: e.player.sendMessage(...), .teleport(...), .name, .uuid, .pos
+e.target    // the one involved — a Player, or an entity handle with methods:
+e.entity    //   .id, .type, .isPlayer, .pos, .health, .freeze(), .damage(),
+e.attacker  //   .teleport(), .tag()... — act on it directly, no ids to shuffle
+e.item      // { item, count, name, displayName, lore, enchants } (or null)
+e.pos       // { x, y, z } — plugs into any position argument directly
+e.from      // { x, y, z, yaw, pitch } — a location (move / respawn)
+
+Event reference
+
+Every event you can subscribe to with game.on(...).
+
+Players
+
+playerJoin
+
+A player joins the planet.
+
+Fields: e.player, e.joinMessage (writable)
+
+playerQuit
+
+A player leaves the planet.
+
+Fields: e.player, e.quitMessage (writable)
+
+playerChatcancellable
+
+A player sends a chat message. Cancel to hide it; rewrite e.message to change it.
+
+Fields: e.player, e.message (writable)
+
+playerDeath
+
+A player dies.
+
+Fields: e.player, e.deathMessage (writable), e.keepInventory (writable)
+
+playerRespawn
+
+A player respawns. Set e.spawn = {x,y,z} to choose where.
+
+Fields: e.player, e.location, e.spawn (writable)
+
+playerInteractcancellable
+
+A player right- or left-clicks a block or the air. e.action says which.
+
+Fields: e.player, e.action, e.item, e.pos, e.block
+
+playerInteractEntitycancellable
+
+A player right-clicks an entity (e.g. to open a shop NPC).
+
+Fields: e.player, e.target
+
+playerDropItemcancellable
+
+A player drops an item.
+
+Fields: e.player, e.item
+
+playerItemConsumecancellable
+
+A player finishes eating or drinking an item.
+
+Fields: e.player, e.item
+
+abilityToggle
+
+A player flipped a named ability channel (generic mod controls — the "Mod Ability 1/2" keybinds emit "ability1"/"ability2"; equipped ability templates use their own channels).
+
+Fields: e.player, e.channel, e.state
+
+playerToggleCrouchcancellable
+
+A player starts or stops sneaking (e.isSneaking is the new state).
+
+Fields: e.player, e.isSneaking
+
+playerJump
+
+A player jumps (leaves the ground moving upward). Not cancellable — the jump already happened on their screen. Note: an upward launch from the ground (knockback, jump pad) fires this too.
+
+Fields: e.player
+
+playerHitcancellable
+
+A player melee-attacks an entity (fires before damage is applied).
+
+Fields: e.player, e.target, e.hitPos
+
+playerMovecancellablethrottled
+
+A player moves. Throttled to at most once per 5 ticks per player (~4×/s).
+
+Fields: e.player, e.from, e.to
+
+Blocks
+
+blockPlacecancellable
+
+A player places a block.
+
+Fields: e.player, e.pos, e.block, e.item
+
+blockBreakcancellable
+
+A player breaks a block. Set e.dropItems = false to suppress drops.
+
+Fields: e.player, e.pos, e.block, e.dropItems (writable)
+
+blockActivationcancellable
+
+A player activates a block — door, button, lever, chest, etc.
+
+Fields: e.player, e.pos, e.block
+
+signChangecancellable
+
+A player finishes editing a sign's text.
+
+Fields: e.player, e.pos, e.lines
+
+Entities & combat
+
+entityDamagecancellable
+
+An entity takes damage from any source (fall, fire, drowning…). Rewrite e.damage to soften or amplify it.
+
+Fields: e.entity, e.cause, e.damage (writable)
+
+entityDamageByEntitycancellable
+
+An entity is damaged by another entity. Fires alongside entityDamage with the attacker attached.
+
+Fields: e.entity, e.attacker, e.cause, e.damage (writable)
+
+entityDeath
+
+An entity dies (players and mobs).
+
+Fields: e.entity
+
+entityExplodecancellable
+
+An explosion goes off (TNT, creeper, …). e.blockCount is how many blocks it would destroy.
+
+Fields: e.entity, e.pos, e.blockCount
+
+entityPickupItemcancellable
+
+A player picks up a dropped item.
+
+Fields: e.player, e.item
+
+entityShootBowcancellable
+
+An entity fires a bow. e.player is the shooter.
+
+Fields: e.player
+
+entityThrowablecancellable
+
+A throwable (snowball, egg, ender pearl…) is thrown. Rewrite e.velocity (0–10) to change its speed.
+
+Fields: e.entity, e.velocity (writable), e.inaccuracy
+
+projectileHitcancellable
+
+A projectile (arrow, snowball…) lands on a block or hits an entity.
+
+Fields: e.projectile, e.hitEntity, e.pos, e.block
+
+Inventory & windows
+
+inventoryClickcancellable
+
+A player clicks a slot in any inventory or window.
+
+Fields: e.player, e.slot, e.click, e.action, e.windowType
+
+playerCloseWindow
+
+A player closes an inventory or window.
+
+Fields: e.player
+
+Lifecycle
+
+tick
+
+Fires every server tick — 20× per second. Keep the handler cheap; prefer game.setInterval for slower loops. e.tick is the current tick number.
+
+Fields: e.tick
+
+scriptLoad
+
+Fires once when scripts load or reload (e.g. right after you save). Use it to set up state, scoreboards and timers.
+
+worldSave
+
+Fires when the planet's world is saved to disk. A good moment to snapshot live state into game.storage.Mods overview
+
+Content packs for your planet: install, fork or build mods that add items, armor, mobs and more — all from a script.
+
+What is a mod?
+
+A mod is a content pack — a plain data object describing new items (their names, textures, crafting recipes, armor, and stats) — registered from an ordinary planet script with game.mods.register(pack). New items show up in every player's inventory, crafting grid and recipe book instantly; nobody installs anything.
+
+The easiest start is the Mods button in the script editor: it lists ready-made packs (like Iron Jetpacks) and installs one as a one-line script. Delete that script to uninstall.
+
+game.mods.install("jetpacks"); // that's the whole script
+
+
+Good to know
+
+Because a mod is just a script, everything you know applies: saving reloads it live, the script quota covers it, and disabling scripts disables the mod. Items keep their identity across edits and restarts, so players never lose a modded item you renamed a recipe on.
+
+The game.mods API
+
+game.mods.install(id)→ { items }
+
+Install a built-in pack: shorthand for register(builtin(id)).
+
+game.mods.list()→ [{ id, name, description, version, itemCount }]
+
+The built-in mod library available on this server.
+
+game.mods.builtin(id)→ pack
+
+A built-in pack's raw data. Log it, study it, copy it into your own script and edit it — this is the best way to learn the pack format: console.log(JSON.stringify(game.mods.builtin("jetpacks"), null, 2))
+
+game.mods.register(pack)→ { items }
+
+Register your own pack: { items: [...], sprites: {...}, armor: {...} }. All-or-nothing — if any item is invalid, nothing registers. Registering again (on script reload) replaces this script's content; other scripts' packs are untouched.
+
+game.mods.installPack(pack)→ { items }
+
+Register a pack passed by value — how a COMMUNITY mod installs (the install script embeds the whole pack). Same path and privileges as register; if the pack carries a script string, it runs after registration.
+
+Fork a built-in mod
+
+The fastest way to make a real mod is to remix one: hit Fork next to any mod in the editor's Mods panel. It copies the entire pack into a new editable script (my_jetpacks) with every name already rewritten to your own namespace, so it runs alongside the original — then just edit the data and save. (Uninstall in the same panel removes an installed mod; it simply deletes its script.)
+
+The same thing by hand, if you'd rather build from the console:
+
+// 1. in any script, dump the pack and copy it from the console:
+console.log(JSON.stringify(game.mods.builtin("jetpacks"), null, 2));
+
+// 2. paste into a NEW script, rename everything to your namespace
+//    ("jetpacks:iron_jetpack" -> "rockets:mk1"), tweak stats/colors/recipes
+
+// 3. register it (names must differ from the installed original so they coexist):
+game.mods.register(myEditedPack);
+
+
+Good to know
+
+Item identity is per name: as long as a name stays in your pack, every existing item of it in player inventories and chests survives your edits, reloads and server restarts.
+
+Limits & lifecycle
+
+▸
+
+per script: 64 items, 128 sprites, sprite URLs up to 64 KB
+
+▸
+
+names, sprite keys and armor families are owned by the script that registered them — two mods can't collide
+
+▸
+
+registration is all-or-nothing: a broken pack registers nothing (the error tells you which item)
+
+▸
+
+deleting or disabling the script removes its content; re-registering restores every item with its identity intact
+
+Items are saved by name, so a modded item sitting in a chest or inventory comes back intact whenever its mod is re-registered — an uninstall doesn't corrupt anything.
+
+Custom items
+Define new items as data — names, textures, recipes — and give them behavior with your script.
+
+Defining items
+Each entry in pack.items defines one item. Names must be namespaced (mypack:ruby_sword) so packs never collide. Templates: generic (a normal item) and the four armor slots — helmet_armor, chest_armor, leggings_armor, and boots_armor. Register all four (each an item with its own armor block) to ship a full wearable set — see Armor & movement for the worn look.
+
+{
+name: "mypack:ruby", // required, "pack:item" format
+displayName: "Ruby",
+template: "generic", // or helmet_armor / chest_armor / leggings_armor / boots_armor
+stackSize: 64, // optional (armor is always 1)
+maxDurability: 250, // optional durability (real wear — fuel is separate, see Abilities & stats)
+layers: [ // icon: sprite layers, back to front
+{ texture: "mypack:ruby", tint: 0xff5566 },
+],
+recipe: { // optional shaped recipe (3x3, null = empty)
+shape: [
+[null, "redstone", null],
+["redstone", "diamond", "redstone"],
+[null, "redstone", null],
+],
+count: 1,
+},
+}
+Recipe cells name vanilla items or other items from your pack, so crafting chains (component → machine → gadget) work. Recipes appear in the recipe book automatically.
+
+Watch out
+
+A grayscale sprite plus a tint per item is how one texture serves a whole tier ladder — that's how the four jetpacks share two sprites.
+
+Textures (sprites)
+Every item layer's texture is either a vanilla texture name (stone, iron_ingot, diamond_sword, ... — see the Textures catalog) or a sprite key your pack ships itself. pack.sprites maps each key to an image URL. The simplest way to ship your own pixel art needs no hosting at all: paste the PNG as a data: URL (up to 64 KB — a 16×16 sprite is a few hundred bytes).
+
+sprites: {
+"mypack:ruby": "data:image/png;base64,iVBORw0KGgo...",
+"mypack:cdn_example": "https://my.site/textures/gadget.png",
+}
+No-code path: the Mod Builder (pencil button in the editor toolbar) does all of this for you — every texture field has an Upload button (pick a small PNG; it becomes a pack sprite automatically) and a Paint button that opens a built-in pixel editor, so you can draw a sprite from scratch or re-edit one of the pack's existing sprites without leaving the game.
+
+▸
+sprites are 16×16 (larger images are drawn into a 16px atlas cell)
+
+▸
+any image editor exports PNG; online "file to data URL" converters do the encoding
+
+▸
+https: URLs work too if you host the file somewhere with open CORS
+
+▸
+no art at all? recolor a vanilla texture: layers: [{ texture: "diamond_sword", tint: 0x8a2be2 }] — tint multiplies onto the sprite, and layers stack back-to-front for composites
+
+Custom sounds
+Packs can ship their own audio: pack.sounds maps a namespaced key to an audio URL — for a community pack that's a data:audio/* base64 URL, no hosting needed (OGG or MP3 recommended; a 2-3 second clip is ~10-40 KB).
+
+game.mods.register({
+id: "mypack",
+items: [ /* ... */ ],
+sounds: {
+"mypack:ring": "data:audio/ogg;base64,T2dnUwAC...",
+},
+});
+Once registered, the key plays through every existing sound surface by name — no new API to learn:
+
+▸
+game.world.playSound("mypack:ring", pos, 1, 1) and p.playSound("mypack:ring", 1, 1)
+
+▸
+a weapon def's fireSound and a projectile's spawnSound
+
+▸
+a custom mob's sounds: { living, hurt, death, step }
+
+▸
+max 16 sounds per pack, 256 KB each
+
+▸
+keys must be namespaced (mypack:ring, not ring) — and vanilla sound names always win, so a pack can never replace a built-in like random.explode
+
+▸
+online "file to data URL" converters do the base64 encoding, same as sprites
+
+Item behavior: your script IS the logic
+A mod's logic is your script. Your registered items work everywhere vanilla names do — give, isHolding, GUIs, recipes — and game.interactions fires your code when someone uses them. A complete custom item, no engine involvement, no assets:
+
+// a grappling hook: right-click a block to fling yourself at it
+game.mods.register({
+items: [{
+name: "hooks:grappler", displayName: "Grappling Hook",
+template: "generic", stackSize: 1,
+layers: [{ texture: "fishing_rod", tint: 0x66ff99 }],
+}],
+});
+
+game.interactions.on("rightClickBlock", { item: "hooks:grappler" }, (e) => {
+const p = e.player, to = e.pos;
+const dx = to.x + 0.5 - p.pos.x, dy = to.y - p.pos.y, dz = to.z + 0.5 - p.pos.z;
+const d = Math.sqrt(dxdx + dydy + dz*dz) || 1;
+p.launch((dx/d) * 2.5, Math.min((dy/d) * 2.5 + 0.6, 3), (dz/d) * 2.5);
+p.playSound("random.bow", 1, 0.6);
+});
+For state that belongs to the ITEM (not the player), use per-stack data — it persists with the stack, syncs to clients, and can drive a HUD gauge:
+
+// a rechargeable blink pearl: 3 charges, refill by clicking a beacon
+game.interactions.on("useItem", { item: "mypack:blink_pearl" }, (e) => {
+const charges = e.player.getItemData("held", "charges") ?? 3;
+if (charges <= 0) return e.player.sendMessage("\red\Out of charges!");
+e.player.setItemData("held", "charges", charges - 1);
+e.player.launch(0, 1.5, 0);
+});
+game.interactions.on("rightClickBlock", { block: "beacon", item: "mypack:blink_pearl" }, (e) => {
+e.player.setItemData("held", "charges", 3);
+});
+Mods can even have their own controls: the "Mod Ability 1/2" keybinds flip named channels that reach your script as an event —
+
+game.on("abilityToggle", (e) => {
+if (e.channel !== "ability1" || !e.state) return;
+if (e.player.isHolding("hooks:grappler")) e.player.launch(0, 2, 0); // double-jump boost
+});
+▸
+getItemData / setItemData(slot, key, value) — slot is 0-35, "held", "head"/"chest"/"legs"/"feet"; values are small JSON (≤512 bytes)
+
+▸
+the fuel field is shared with the engine — a script writing data.fuel IS a refueling station for any powered-flight item
+
+▸
+abilityToggle fires for every named channel; any number of mods coexist by using their own channel names (the flight template owns flight_power/flight_hover)
+
+Custom blocks
+Placeable blocks as data — full cubes to arbitrary shapes — plus ore veins and natural spawns for a mod's world presence.
+
+Defining blocks
+pack.blocks adds placeable blocks. texture alone makes an opaque full cube; model gives ANY shape — the name of an existing block_models.json model to inherit wholesale ("oak_stairs"), or a { parent?, textures?, elements? } def that binds a template's #-vars ({ parent: "slab", textures: { bottom, top, side } }; { parent: "cross", textures: { cross } } for swaying foliage) and/or supplies custom Minecraft-format elements (from/to in 0–16 sixteenths, per-face uv with #-ref textures). Texture values are vanilla texture keys or the pack's own sprite keys. The Mod Builder's shape presets (cube, faces, cutout, slab, stairs, carpet, plant, pane, custom) generate all of this for you.
+
+blocks: [{
+name: "gems:ruby_ore",
+displayName: "Ruby Ore",
+texture: "gems:ruby_ore", // full-cube shorthand; OR model: {...} for any shape
+collision: "block", // "block" | "empty" | up to 8 { min: [x,y,z], max: [x,y,z] } boxes
+opaque: true, // set false for glass-like cutout textures
+hardness: 3, // stone ≈ 1.5, ore ≈ 3
+resistance: 15, // blast resistance (defaults to hardness × 5)
+light: 0, // 0-15 light emission
+drop: { item: "gems:ruby", min: 1, max: 2, xp: 3 }, // omit to drop itself; xp scatters orbs
+}]
+Shape and collision derive from the def deterministically on BOTH the client and the server (that's what keeps custom blocks anticheat-safe) — a parent-template model (slab, stairs) should pass collision explicitly to match its visuals. Full schema: lib/shared/mods/DynamicBlocks.ts.
+
+Rotation & block states
+Good to know
+
+A pack block has exactly ONE blockstate — no facing/rotation on placement yet. Its model's orientation is baked in, which is why builder stairs face the same way no matter how you place them. Vanilla-style placement states (game.world.setBlock(x, y, z, "oak_stairs", { facing: "west", half: "top" })) work for VANILLA blocks only.
+
+Until rotation variants land, the workaround is one registered block per orientation — rotated elements in each def — and a blockPlace handler that swaps in the right variant from the player's facing:
+
+// gems:bench_north / _east / _south / west registered with rotated elements
+game.on("blockPlace", (e) => {
+if (!e.block || !e.block.startsWith("gems*:bench**")) return;*
+const look = e.player.getLook();
+const dir = Math.abs(look.x) > Math.abs(look.z) ? (look.x > 0 ? "east" : "west") : (look.z > 0 ? "south" : "north");
+game.world.setBlock(e.pos, "gems:bench" + dir);
+});
+World generation & natural spawns
+Two world hooks give a mod's content a natural presence, both pure data on top of the pack (full docs on the World → Ore generation / Natural mob spawning pages):
+
+game.world.registerOreGen("gems:ruby_ore", { perChunk: 4, veinSize: 6, minY: 4, maxY: 40 });
+game.world.registerMobSpawn("gems:crystal_golem", { kind: "monster", weight: 40, groupMax: 2 });
+Ore appears only in chunks generated after registration; spawn rules join the world's normal spawn cycle (light rules and mob caps still apply). Both are cleared and re-applied on script reload.Custom entities
+
+Ship whole custom mobs as data: a box-built model, texture, stats and AI preset — spawned like any vanilla mob.
+
+Custom entities (mobs)
+
+pack.entities ships whole custom mobs as data: a box-built 3D model, a texture sheet, stats and a behavior preset. Spawn one with game.world.spawnMob(pos, "mypack:name") — it walks, animates, fights, drops loot and persists in the world like any vanilla mob, and all the entity APIs (game.entities, interactions, entityDeath/entityDamage events) work on it.
+
+entities: [{
+  name: "mypack:frost_golem",
+  displayName: "Frost Golem",
+  rig: "biped",                    // "biped" | "quadruped" | "blob" | "static"
+  texture: "data:image/png;base64,...", // one sheet, 64x64-grid UVs (any multiple)
+  model: {                         // named joints: a pivot + textured boxes (model pixels, 16 = 1 block)
+    head:     { pivot: [0, 24, 0], boxes: [{ w: 8, h: 8, d: 8, x: 0, y: 4, z: 0, u: 0, v: 0 }] },
+    torso:    { boxes: [{ w: 8, h: 12, d: 4, x: 0, y: 18, z: 0, u: 16, v: 16 }] },
+    leftLeg:  { pivot: [-2, 12, 0], boxes: [{ w: 4, h: 12, d: 4, x: 0, y: -6, z: 0, u: 0, v: 16 }] },
+    rightLeg: { pivot: [ 2, 12, 0], boxes: [{ w: 4, h: 12, d: 4, x: 0, y: -6, z: 0, u: 0, v: 16 }] },
+  },
+  health: 40, speed: 0.3, attackDamage: 6,
+  size: { width: 0.8, height: 2.2 },     // collision box in blocks
+  behavior: "hostile",             // "passive" | "neutral" | "hostile" | "still"
+  drop: { item: "mypack:frost_shard", min: 1, max: 2 },
+}]
+
+
+The rig decides which joint names animate: biped swings leftArm/rightArm/leftLeg/rightLeg zombie-style, quadruped swings frontLeftLeg/.../backRightLeg cow-style, and both turn head to look around. blob and static don't animate limbs. Any other joint name renders rigidly — shape is entirely yours; the walk cycle comes free with the names.
+
+▸
+
+behavior: passive wanders and flees, neutral fights back when hit, hostile hunts players, still stands in place (shopkeepers — pair with game.interactions.on("rightClickEntity"))
+
+▸
+
+boxes sit relative to their joint's pivot (pixels from the feet, +y up); limbs rotate around the pivot, so put it where the limb should hinge
+
+▸
+
+sounds: optional { living, hurt, death, step } sprite names (same catalog as playSound)
+
+▸
+
+up to 16 entity defs per script, 16 joints / 64 boxes per def
